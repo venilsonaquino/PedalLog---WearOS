@@ -12,6 +12,9 @@
     <!-- Permissões de Wake Lock para Ambient Mode -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Permissão para Feedback Háptico (Auto-Pause) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!-- Sensores e atividade -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.BODY_SENSORS" />

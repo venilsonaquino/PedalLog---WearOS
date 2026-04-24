@@ -11,6 +11,8 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.pedallog.data.AppDatabase
@@ -58,8 +60,10 @@ class TrackingService : Service() {
         const val ACTION_FINISH = "com.example.pedallog.ACTION_FINISH"
 
         // ── Parâmetros de localização ─────────────────────────────────────────
-        private const val LOCATION_UPDATE_INTERVAL  = 1000L
-        private const val LOCATION_FASTEST_INTERVAL = 500L
+        private const val LOCATION_UPDATE_INTERVAL_ACTIVE  = 1000L
+        private const val LOCATION_FASTEST_INTERVAL_ACTIVE = 500L
+        private const val LOCATION_UPDATE_INTERVAL_PAUSED  = 5000L
+        private const val LOCATION_FASTEST_INTERVAL_PAUSED = 2000L
 
         // ── Filtros anti-drift ────────────────────────────────────────────────
         /** TEMPORARIAMENTE 100 m para debug — reduzir para 20f em produção. */
@@ -105,6 +109,10 @@ class TrackingService : Service() {
 
     /** Acumulador de distância em metros (convertido para km ao publicar no StateFlow). */
     private var totalDistanceMeters: Float = 0f
+
+    // ── Contadores Auto-Pause / Auto-Resume ───────────────────────────────────
+    private var lowSpeedSeconds = 0
+    private var highSpeedSeconds = 0
 
     // ── Ciclo de vida ─────────────────────────────────────────────────────────
 
@@ -165,18 +173,26 @@ class TrackingService : Service() {
             }
 
             lastLocation = null   // reinicia cálculo de segmento para evitar salto
+            lowSpeedSeconds = 0
+            highSpeedSeconds = 0
             _isPaused.value = false
             _hasActiveSession.value = true
             _isTracking.value = true
-            startLocationUpdates()
+            
+            // Inicia o GPS com intervalo rápido de 1s
+            restartLocationUpdates(isPaused = false)
         }
     }
 
     /**
-     * ACTION_PAUSE — pausa a sessão. GPS para, serviço permanece vivo.
+     * ACTION_PAUSE — pausa a sessão. O GPS continua em modo de economia para permitir Auto-Resume.
      */
     private fun handlePause() {
-        stopLocationUpdates()
+        // Em vez de parar totalmente, diminui a frequência para economia de bateria
+        restartLocationUpdates(isPaused = true)
+        
+        lowSpeedSeconds = 0
+        highSpeedSeconds = 0
         _isTracking.value = false
         _speedKmh.value = 0.0
         _isPaused.value = true
@@ -285,32 +301,47 @@ class TrackingService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
 
-                // ── Regra crítica: não processa dados com sessão pausada ──────
-                if (_isPaused.value) return
-
-                val location = result.lastLocation ?: run {
-                    Log.d("PedalDebug", "lastLocation null")
-                    return
-                }
-
-                // ── Log de diagnóstico ────────────────────────────────────────
-                Log.d(
-                    "PedalDebug",
-                    "Fix | Acc=${"%.1f".format(location.accuracy)} m " +
-                    "Vel=${"%.2f".format(location.speed)} m/s " +
-                    "hasSpeed=${location.hasSpeed()}"
-                )
+                val location = result.lastLocation ?: return
 
                 // ── Filtro 1: Precisão ────────────────────────────────────────
                 if (!location.hasAccuracy() || location.accuracy > MIN_ACCURACY_METERS) {
-                    Log.d("PedalDebug", ">>> Fix DESCARTADO: acc=${location.accuracy} m")
                     return
                 }
 
-                // ── Filtro 2: Deadband de velocidade ──────────────────────────
                 val rawSpeedMs = if (location.hasSpeed()) location.speed else 0f
                 val speedMs = if (rawSpeedMs >= MIN_SPEED_MS) rawSpeedMs else 0f
+
+                // ── Lógica de Auto-Resume (se pausado) ────────────────────────
+                if (_isPaused.value) {
+                    // Como o intervalo está em 5s, um único fix rápido > 1.0 m/s 
+                    // já representa movimento sustentado.
+                    if (rawSpeedMs > 1.0f) {
+                        highSpeedSeconds += 5 // Soma 5s logo de cara
+                        if (highSpeedSeconds >= 2) {
+                            Log.d(TAG, "Auto-Resume engatado! (Velocidade: $rawSpeedMs m/s)")
+                            triggerResumeVibration()
+                            handleStart()
+                        }
+                    } else {
+                        highSpeedSeconds = 0
+                    }
+                    return // Não acumula distância em modo pause
+                }
+
+                // ── Lógica de Auto-Pause (se ativo) ───────────────────────────
                 _speedKmh.value = speedMs * 3.6
+
+                if (rawSpeedMs < MIN_SPEED_MS) {
+                    lowSpeedSeconds++ // GPS em modo ativo atualiza a cada 1s
+                    if (lowSpeedSeconds >= 5) {
+                        Log.d(TAG, "Auto-Pause engatado! (Abaixo de 0.5 m/s por 5s)")
+                        triggerPauseVibration()
+                        handlePause()
+                        return
+                    }
+                } else {
+                    lowSpeedSeconds = 0
+                }
 
                 // ── Filtro 3: Acúmulo de distância + persistência ─────────────
                 if (speedMs > 0f) {
@@ -330,8 +361,7 @@ class TrackingService : Service() {
                                 distance  = _distanceTraveled.value
                             )
                             serviceScope.launch(Dispatchers.IO) {
-                                val rowId = dao.insertPoint(point)
-                                Log.d("PedalDebug", "PedalPoint inserido rowId=$rowId, sessionId=$sessionId")
+                                dao.insertPoint(point)
                             }
                         }
                     }
@@ -342,15 +372,46 @@ class TrackingService : Service() {
     }
 
     @SuppressLint("MissingPermission")
-    private fun startLocationUpdates() {
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, LOCATION_UPDATE_INTERVAL)
-            .setMinUpdateIntervalMillis(LOCATION_FASTEST_INTERVAL)
+    private fun restartLocationUpdates(isPaused: Boolean) {
+        stopLocationUpdates()
+        
+        val interval = if (isPaused) LOCATION_UPDATE_INTERVAL_PAUSED else LOCATION_UPDATE_INTERVAL_ACTIVE
+        val fastest  = if (isPaused) LOCATION_FASTEST_INTERVAL_PAUSED else LOCATION_FASTEST_INTERVAL_ACTIVE
+        
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, interval)
+            .setMinUpdateIntervalMillis(fastest)
             .build()
+            
         fusedLocationClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates() {
+        restartLocationUpdates(isPaused = _isPaused.value)
     }
 
     private fun stopLocationUpdates() {
         fusedLocationClient.removeLocationUpdates(locationCallback)
+    }
+
+    // ── Vibrador (Feedback Tátil) ─────────────────────────────────────────────
+
+    private fun triggerPauseVibration() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibrator = getSystemService(VibratorManager::class.java).defaultVibrator
+            // Dois toques curtos (150ms vibra, 100ms pausa, 150ms vibra)
+            val timings = longArrayOf(0, 150, 100, 150)
+            val amplitudes = intArrayOf(0, 255, 0, 255)
+            vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
+        }
+    }
+
+    private fun triggerResumeVibration() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibrator = getSystemService(VibratorManager::class.java).defaultVibrator
+            // Um toque longo (400ms)
+            vibrator.vibrate(VibrationEffect.createOneShot(400, 255))
+        }
     }
 
     // ── Notificação Foreground ────────────────────────────────────────────────

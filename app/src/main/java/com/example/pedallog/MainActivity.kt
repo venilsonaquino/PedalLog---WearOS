@@ -146,8 +146,8 @@ fun PedalLogApp(isAmbient: Boolean, ambientUpdateTrigger: Int) {
     val burnInOffset = remember(isAmbient, ambientUpdateTrigger) {
         if (isAmbient) {
             val minutes = System.currentTimeMillis() / 60000
-            val shiftX = ((minutes % 5) - 2) * 2 // -4 a +4 dp
-            val shiftY = (((minutes / 5) % 5) - 2) * 2 // -4 a +4 dp
+            val shiftX = (((minutes % 5) - 2) * 2).toInt() // -4 a +4 dp
+            val shiftY = ((((minutes / 5) % 5) - 2) * 2).toInt() // -4 a +4 dp
             Modifier.offset(shiftX.dp, shiftY.dp)
         } else {
             Modifier
