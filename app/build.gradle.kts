@@ -53,9 +53,10 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
 
-    // Wear Compose
+    // Wear Compose + Ambient Mode
     implementation(libs.wear.compose.material)
     implementation(libs.wear.compose.foundation)
+    implementation(libs.androidx.wear)
 
     // Activity Compose
     implementation(libs.androidx.activity.compose)
