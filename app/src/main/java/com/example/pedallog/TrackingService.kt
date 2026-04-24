@@ -20,6 +20,7 @@ import com.example.pedallog.data.PedalDao
 import com.example.pedallog.data.PedalPoint
 import com.example.pedallog.data.PedalSession
 import com.example.pedallog.sync.WearSyncManager
+import com.example.pedallog.util.FormatUtils
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -30,8 +31,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Date
@@ -77,6 +80,9 @@ class TrackingService : Service() {
         private val _distanceTraveled = MutableStateFlow(0.0)
         val distanceTraveled: StateFlow<Double> = _distanceTraveled
 
+        private val _activeTimeSeconds = MutableStateFlow(0L)
+        val activeTimeSeconds: StateFlow<Long> = _activeTimeSeconds
+
         /** true quando o GPS está ativo E a sessão NÃO está pausada. */
         private val _isTracking = MutableStateFlow(false)
         val isTracking: StateFlow<Boolean> = _isTracking
@@ -114,6 +120,8 @@ class TrackingService : Service() {
     private var lowSpeedSeconds = 0
     private var highSpeedSeconds = 0
 
+    private var timerJob: kotlinx.coroutines.Job? = null
+
     // ── Ciclo de vida ─────────────────────────────────────────────────────────
 
     override fun onCreate() {
@@ -139,10 +147,12 @@ class TrackingService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopLocationUpdates()
+        timerJob?.cancel()
         serviceScope.cancel()
         // Reseta estado público para a UI refletir ausência de serviço
         _isTracking.value = false
         _speedKmh.value = 0.0
+        _activeTimeSeconds.value = 0L
     }
 
     // ── Máquina de Estados ────────────────────────────────────────────────────
@@ -161,11 +171,13 @@ class TrackingService : Service() {
                 currentSession = newSession.copy(id = insertedId)
                 totalDistanceMeters = 0f
                 _distanceTraveled.value = 0.0
+                _activeTimeSeconds.value = 0L
                 Log.d("PedalDebug", "Nova PedalSession criada: id=$insertedId")
             } else {
                 // ── Retoma sessão pausada ────────────────────────────────────
                 val resumed = active.copy(isPaused = false)
                 currentSession = resumed
+                totalDistanceMeters = FormatUtils.metersToKm(active.totalDistance) * 1000f // Reverte pra metros internamente
                 totalDistanceMeters = active.totalDistance * 1000f
                 _distanceTraveled.value = active.totalDistance.toDouble()
                 withContext(Dispatchers.IO) { dao.updateSession(resumed) }
@@ -181,6 +193,7 @@ class TrackingService : Service() {
             
             // Inicia o GPS com intervalo rápido de 1s
             restartLocationUpdates(isPaused = false)
+            startActiveTimer()
         }
     }
 
@@ -258,6 +271,7 @@ class TrackingService : Service() {
             _isPaused.value = false
             _hasActiveSession.value = false
             _distanceTraveled.value = 0.0
+            _activeTimeSeconds.value = 0L
             currentSession = null
             totalDistanceMeters = 0f
             lastLocation = null
@@ -285,12 +299,27 @@ class TrackingService : Service() {
             if (!active.isPaused) {
                 _isPaused.value = false
                 _isTracking.value = true
-                startLocationUpdates()
+                restartLocationUpdates(isPaused = false)
+                startActiveTimer()
                 Log.d("PedalDebug", "Sessão id=${active.id} restaurada e retomada automaticamente")
             } else {
                 _isPaused.value = true
                 _isTracking.value = false
+                restartLocationUpdates(isPaused = true)
+                startActiveTimer()
                 Log.d("PedalDebug", "Sessão id=${active.id} restaurada em estado pausado")
+            }
+        }
+    }
+
+    private fun startActiveTimer() {
+        if (timerJob?.isActive == true) return
+        timerJob = serviceScope.launch {
+            while (isActive) {
+                delay(1000)
+                if (!_isPaused.value && _isTracking.value) {
+                    _activeTimeSeconds.value += 1
+                }
             }
         }
     }
@@ -329,7 +358,7 @@ class TrackingService : Service() {
                 }
 
                 // ── Lógica de Auto-Pause (se ativo) ───────────────────────────
-                _speedKmh.value = speedMs * 3.6
+                _speedKmh.value = FormatUtils.msToKmh(speedMs).toDouble()
 
                 if (rawSpeedMs < MIN_SPEED_MS) {
                     lowSpeedSeconds++ // GPS em modo ativo atualiza a cada 1s
@@ -350,7 +379,7 @@ class TrackingService : Service() {
                         // Rejeita segmentos implausíveis (>100 m/s ≈ 360 km/h)
                         if (segmentMeters > 0f && segmentMeters < 100f) {
                             totalDistanceMeters += segmentMeters
-                            _distanceTraveled.value = totalDistanceMeters / 1000.0
+                            _distanceTraveled.value = FormatUtils.metersToKm(totalDistanceMeters).toDouble()
 
                             val sessionId = currentSession?.id ?: return@let
                             val point = PedalPoint(

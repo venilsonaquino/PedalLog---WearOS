@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -44,6 +45,7 @@ import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
 import androidx.compose.foundation.layout.offset
+import com.example.pedallog.util.FormatUtils
 
 /**
  * Activity principal do PedalLog para Wear OS.
@@ -103,6 +105,7 @@ fun PedalLogApp(isAmbient: Boolean, ambientUpdateTrigger: Int) {
     val isTracking by TrackingService.isTracking.collectAsState()
     val isPaused   by TrackingService.isPaused.collectAsState()
     val hasSession by TrackingService.hasActiveSession.collectAsState()
+    val activeTime by TrackingService.activeTimeSeconds.collectAsState()
 
     // ── Permissões ────────────────────────────────────────────────────────────
     var hasPermission by remember {
@@ -155,9 +158,9 @@ fun PedalLogApp(isAmbient: Boolean, ambientUpdateTrigger: Int) {
     }
 
     // ── Paleta Adaptativa ─────────────────────────────────────────────────────
-    val speedColor    = if (isAmbient) Color.White else GreenAccent
-    val distanceColor = if (isAmbient) Color.LightGray else CyanAccent
-    val unitColor     = if (isAmbient) Color.DarkGray else LabelGray
+    val mainMetricColor = if (isAmbient) Color.White else CyanAccent
+    val secondaryMetricColor = if (isAmbient) Color.LightGray else Color.White
+    val unitColor = if (isAmbient) Color.DarkGray else LabelGray
 
     // ── Layout ────────────────────────────────────────────────────────────────
     MaterialTheme {
@@ -171,33 +174,63 @@ fun PedalLogApp(isAmbient: Boolean, ambientUpdateTrigger: Int) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
 
-                // ── Velocidade ──
+                // ── Distância (Métrica Principal) ──
                 Text(
-                    text = "%.1f".format(speed),
-                    color = speedColor,
-                    fontSize = 40.sp,
+                    text = "%.2f".format(distance),
+                    color = mainMetricColor,
+                    fontSize = 46.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    text = "km/h",
+                    text = "km",
                     color = unitColor,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(8.dp))
 
-                // ── Distância ──
-                Text(
-                    text = "Distância: ${"%.2f".format(distance)} km",
-                    color = distanceColor,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center
-                )
+                // ── Métricas Secundárias (Velocidade e Cronômetro) ──
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Velocidade Atual
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "%.1f".format(speed),
+                            color = secondaryMetricColor,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "km/h",
+                            color = unitColor,
+                            fontSize = 12.sp
+                        )
+                    }
 
-                Spacer(Modifier.height(10.dp))
+                    // Divisor
+                    Text(text = "|", color = unitColor.copy(alpha = 0.5f), fontSize = 20.sp)
+
+                    // Tempo Ativo
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = FormatUtils.formatActiveTime(activeTime, isAmbient),
+                            color = secondaryMetricColor,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "tempo",
+                            color = unitColor,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
 
                 // ── Ocultar botões em modo Ambient ──
                 if (!isAmbient) {
