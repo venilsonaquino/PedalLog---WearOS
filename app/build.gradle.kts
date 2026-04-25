@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.pedallog"
+    namespace = "com.pedallog.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.pedallog"
+        applicationId = "com.pedallog.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

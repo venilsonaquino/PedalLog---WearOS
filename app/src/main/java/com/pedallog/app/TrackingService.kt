@@ -1,4 +1,4 @@
-package com.example.pedallog
+package com.pedallog.app
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -15,12 +15,12 @@ import android.os.VibrationEffect
 import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.example.pedallog.data.AppDatabase
-import com.example.pedallog.data.PedalDao
-import com.example.pedallog.data.PedalPoint
-import com.example.pedallog.data.PedalSession
-import com.example.pedallog.sync.WearSyncManager
-import com.example.pedallog.util.FormatUtils
+import com.pedallog.app.data.AppDatabase
+import com.pedallog.app.data.PedalDao
+import com.pedallog.app.data.PedalPoint
+import com.pedallog.app.data.PedalSession
+import com.pedallog.app.sync.WearSyncManager
+import com.pedallog.app.util.FormatUtils
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -58,9 +58,9 @@ class TrackingService : Service() {
         private const val NOTIFICATION_ID = 1
 
         // ── Intent Actions ────────────────────────────────────────────────────
-        const val ACTION_START  = "com.example.pedallog.ACTION_START"
-        const val ACTION_PAUSE  = "com.example.pedallog.ACTION_PAUSE"
-        const val ACTION_FINISH = "com.example.pedallog.ACTION_FINISH"
+        const val ACTION_START  = "com.pedallog.app.ACTION_START"
+        const val ACTION_PAUSE  = "com.pedallog.app.ACTION_PAUSE"
+        const val ACTION_FINISH = "com.pedallog.app.ACTION_FINISH"
 
         // ── Parâmetros de localização ─────────────────────────────────────────
         private const val LOCATION_UPDATE_INTERVAL_ACTIVE  = 1000L

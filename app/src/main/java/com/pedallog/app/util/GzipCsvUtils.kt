@@ -1,6 +1,6 @@
-package com.example.pedallog.util
+package com.pedallog.app.util
 
-import com.example.pedallog.data.PedalPoint
+import com.pedallog.app.data.PedalPoint
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPOutputStream
 

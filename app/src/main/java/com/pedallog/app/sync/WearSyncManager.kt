@@ -1,10 +1,10 @@
-package com.example.pedallog.sync
+package com.pedallog.app.sync
 
 import android.content.Context
 import android.util.Log
-import com.example.pedallog.data.PedalPoint
-import com.example.pedallog.data.PedalSession
-import com.example.pedallog.util.GzipCsvUtils
+import com.pedallog.app.data.PedalPoint
+import com.pedallog.app.data.PedalSession
+import com.pedallog.app.util.GzipCsvUtils
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.suspendCancellableCoroutine

@@ -1,4 +1,4 @@
-package com.example.pedallog.data
+package com.pedallog.app.data
 
 import androidx.room.Dao
 import androidx.room.Insert
@@ -47,6 +47,12 @@ interface PedalDao {
      */
     @Query("SELECT * FROM pedal_sessions WHERE endTime IS NOT NULL ORDER BY startTime DESC")
     suspend fun getAllCompletedSessions(): List<PedalSession>
+
+    /**
+     * Retorna todas as sessões registradas no banco.
+     */
+    @Query("SELECT * FROM pedal_sessions")
+    suspend fun getAllSessions(): List<PedalSession>
 
     /**
      * Retorna sessões finalizadas que ainda não foram sincronizadas.

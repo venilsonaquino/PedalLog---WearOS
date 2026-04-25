@@ -1,4 +1,4 @@
-package com.example.pedallog
+package com.pedallog.app
 
 import android.Manifest
 import android.content.Context
@@ -45,7 +45,11 @@ import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
 import androidx.compose.foundation.layout.offset
-import com.example.pedallog.util.FormatUtils
+import com.pedallog.app.util.FormatUtils
+import android.util.Log
+import androidx.lifecycle.lifecycleScope
+import com.pedallog.app.data.AppDatabase
+import kotlinx.coroutines.launch
 
 /**
  * Activity principal do PedalLog para Wear OS.
@@ -83,6 +87,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         lifecycle.addObserver(AmbientLifecycleObserver(this, ambientCallback))
+
+        // Debug: Listar sessões restauradas do banco
+        val dao = AppDatabase.getInstance(this).pedalDao()
+        lifecycleScope.launch {
+            try {
+                val sessions = dao.getAllSessions()
+                Log.d("PedalDebug", "Sessões restauradas: ${sessions.size}")
+            } catch (e: Exception) {
+                Log.e("PedalDebug", "Erro ao acessar banco: ${e.message}")
+            }
+        }
 
         setContent { PedalLogApp(isAmbient, ambientUpdateTrigger) }
     }

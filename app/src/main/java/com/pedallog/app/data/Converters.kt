@@ -1,4 +1,4 @@
-package com.example.pedallog.data
+package com.pedallog.app.data
 
 import androidx.room.TypeConverter
 import java.util.Date

@@ -1,9 +1,9 @@
-package com.example.pedallog.sync
+package com.pedallog.app.sync
 
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
-import com.example.pedallog.data.AppDatabase
+import com.pedallog.app.data.AppDatabase
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import kotlinx.coroutines.CoroutineScope

@@ -1,4 +1,4 @@
-package com.example.pedallog.util
+package com.pedallog.app.util
 
 object FormatUtils {
 
