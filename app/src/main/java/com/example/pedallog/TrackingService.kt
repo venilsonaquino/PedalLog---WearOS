@@ -70,7 +70,7 @@ class TrackingService : Service() {
 
         // ── Filtros anti-drift ────────────────────────────────────────────────
         /** TEMPORARIAMENTE 100 m para debug — reduzir para 20f em produção. */
-        private const val MIN_ACCURACY_METERS = 100f
+        private const val MIN_ACCURACY_METERS = 20f
         private const val MIN_SPEED_MS = 0.5f
 
         // ── StateFlows expostos para a UI ─────────────────────────────────────
@@ -259,8 +259,10 @@ class TrackingService : Service() {
                     }
                     withContext(Dispatchers.IO) {
                         WearSyncManager.syncSession(applicationContext, finished, points)
+                        // Marca como sincronizado após o sucesso
+                        dao.updateSession(finished.copy(isSynced = true))
                     }
-                    Log.d(TAG, "Sincronização concluída: ${points.size} pontos enviados")
+                    Log.d(TAG, "Sincronização concluída: ${points.size} pontos enviados e marcados como isSynced")
                 } catch (e: Exception) {
                     // Falha na sincronização não bloqueia o encerramento da sessão
                     Log.e(TAG, "Erro na sincronização Wearable: ${e.message}")
@@ -314,7 +316,7 @@ class TrackingService : Service() {
 
     private fun startActiveTimer() {
         if (timerJob?.isActive == true) return
-        timerJob = serviceScope.launch {
+        timerJob = CoroutineScope(Dispatchers.Default).launch {
             while (isActive) {
                 delay(1000)
                 if (!_isPaused.value && _isTracking.value) {

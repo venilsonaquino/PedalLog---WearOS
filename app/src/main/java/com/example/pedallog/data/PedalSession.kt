@@ -31,5 +31,6 @@ data class PedalSession(
     val endTime: Date? = null,
     val totalDistance: Float = 0f,                          // km
     val isPaused: Boolean = false,
+    val isSynced: Boolean = false,                          // Indica se já foi sincronizado com o celular
     val syncUuid: String = UUID.randomUUID().toString()     // identificador único de sincronização
 )

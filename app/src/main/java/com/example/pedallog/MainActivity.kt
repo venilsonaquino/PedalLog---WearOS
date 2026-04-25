@@ -160,7 +160,7 @@ fun PedalLogApp(isAmbient: Boolean, ambientUpdateTrigger: Int) {
     // ── Paleta Adaptativa ─────────────────────────────────────────────────────
     val mainMetricColor = if (isAmbient) Color.White else CyanAccent
     val secondaryMetricColor = if (isAmbient) Color.LightGray else Color.White
-    val unitColor = if (isAmbient) Color.DarkGray else LabelGray
+    val unitColor = if (isAmbient) Color.Gray else LabelGray
 
     // ── Layout ────────────────────────────────────────────────────────────────
     MaterialTheme {

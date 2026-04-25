@@ -48,6 +48,12 @@ interface PedalDao {
     @Query("SELECT * FROM pedal_sessions WHERE endTime IS NOT NULL ORDER BY startTime DESC")
     suspend fun getAllCompletedSessions(): List<PedalSession>
 
+    /**
+     * Retorna sessões finalizadas que ainda não foram sincronizadas.
+     */
+    @Query("SELECT * FROM pedal_sessions WHERE endTime IS NOT NULL AND isSynced = 0 ORDER BY startTime ASC")
+    suspend fun getUnsyncedSessions(): List<PedalSession>
+
     // ── PedalPoint ────────────────────────────────────────────────────────────
 
     /**

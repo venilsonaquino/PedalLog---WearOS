@@ -26,17 +26,17 @@ object FormatUtils {
         val minutes = (activeSeconds % 3600) / 60
         val seconds = activeSeconds % 60
 
-        return if (hours > 0) {
-            if (isAmbient) {
-                String.format("%d:%02d", hours, minutes)
+        return if (isAmbient) {
+            // Em modo Ambient, mostramos HH:mm para economizar bateria (sem segundos piscando)
+            if (hours > 0) {
+                String.format("%02d:%02d", hours, minutes)
             } else {
-                String.format("%d:%02d:%02d", hours, minutes, seconds)
+                String.format("00:%02d", minutes)
             }
         } else {
-            if (isAmbient) {
-                String.format("%02d", minutes) // Ou HH:mm -> 00:mm se preferir manter formato padrão. A regra diz: "exiba apenas HH:mm".
-                // Para manter consistência com o pedido "apenas HH:mm", usaremos sempre horas e minutos se ambient
-                String.format("%02d:%02d", hours, minutes)
+            // Modo ativo: mostra HH:mm:ss ou mm:ss
+            if (hours > 0) {
+                String.format("%d:%02d:%02d", hours, minutes, seconds)
             } else {
                 String.format("%02d:%02d", minutes, seconds)
             }
