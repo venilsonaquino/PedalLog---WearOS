@@ -213,7 +213,8 @@ class TrackingService : Service() {
         currentSession?.let { session ->
             val paused = session.copy(
                 isPaused = true,
-                totalDistance = totalDistanceMeters / 1000f
+                totalDistance = totalDistanceMeters / 1000f,
+                activeDurationMs = _activeTimeSeconds.value * 1000L
             )
             currentSession = paused
             serviceScope.launch(Dispatchers.IO) {
@@ -247,7 +248,8 @@ class TrackingService : Service() {
                 val finished = session.copy(
                     endTime = Date(),
                     isPaused = false,
-                    totalDistance = totalDistanceMeters / 1000f
+                    totalDistance = totalDistanceMeters / 1000f,
+                    activeDurationMs = _activeTimeSeconds.value * 1000L
                 )
                 withContext(Dispatchers.IO) { dao.updateSession(finished) }
                 Log.d("PedalDebug", "Sessão id=${finished.id} finalizada. Dist=${finished.totalDistance} km")
@@ -258,7 +260,12 @@ class TrackingService : Service() {
                         dao.getPointsForSession(finished.id)
                     }
                     withContext(Dispatchers.IO) {
-                        WearSyncManager.syncSession(applicationContext, finished, points)
+                        WearSyncManager.syncSession(
+                            applicationContext, 
+                            finished, 
+                            points,
+                            _activeTimeSeconds.value * 1000L
+                        )
                         // Marca como sincronizado após o sucesso
                         dao.updateSession(finished.copy(isSynced = true))
                     }
@@ -389,8 +396,22 @@ class TrackingService : Service() {
                                 latitude  = location.latitude,
                                 longitude = location.longitude,
                                 speed     = _speedKmh.value,
-                                distance  = _distanceTraveled.value
+                                distance  = _distanceTraveled.value,
+                                timestamp = location.time
                             )
+                            
+                            // Se este for o primeiro ponto de uma nova sessão, 
+                            // atualizamos o startTime para o horário real do GPS
+                            if (totalDistanceMeters <= segmentMeters) {
+                                val updatedSession = currentSession?.copy(startTime = Date(location.time))
+                                if (updatedSession != null) {
+                                    currentSession = updatedSession
+                                    serviceScope.launch(Dispatchers.IO) {
+                                        dao.updateSession(updatedSession)
+                                    }
+                                }
+                            }
+
                             serviceScope.launch(Dispatchers.IO) {
                                 dao.insertPoint(point)
                             }

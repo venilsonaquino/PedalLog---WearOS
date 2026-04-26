@@ -61,7 +61,7 @@ class SyncListenerService : WearableListenerService() {
                 Log.d(TAG, "Sessão ${session.id}: ${points.size} pontos recuperados do banco.")
 
                 // Enviar via Data Layer (comprime + envia)
-                WearSyncManager.syncSession(applicationContext, session, points)
+                WearSyncManager.syncSession(applicationContext, session, points, session.activeDurationMs)
                 
                 // Atualizar flag isSynced no banco local
                 val updatedSession = session.copy(isSynced = true)

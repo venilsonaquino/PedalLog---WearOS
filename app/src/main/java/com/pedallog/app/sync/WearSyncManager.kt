@@ -46,7 +46,8 @@ object WearSyncManager {
     suspend fun syncSession(
         context: Context,
         session: PedalSession,
-        points: List<PedalPoint>
+        points: List<PedalPoint>,
+        activeDurationMs: Long
     ) {
         // ── 1. Serializar pontos → CSV → GZIP via Utils ───────────────────────
         val compressedPoints = GzipCsvUtils.compressPoints(points)
@@ -55,7 +56,8 @@ object WearSyncManager {
             TAG,
             "Sincronizando sessão ${session.syncUuid}: " +
             "${points.size} pontos | " +
-            "GZIP=${compressedPoints.size} bytes"
+            "GZIP=${compressedPoints.size} bytes | " +
+            "Duração=${activeDurationMs}ms"
         )
 
         if (compressedPoints.size > SIZE_WARN_BYTES) {
@@ -72,6 +74,7 @@ object WearSyncManager {
         Log.d(TAG, " -> start_time: ${session.startTime}")
         Log.d(TAG, " -> end_time: ${session.endTime}")
         Log.d(TAG, " -> total_distance: ${session.totalDistance}km")
+        Log.d(TAG, " -> active_duration_ms: $activeDurationMs")
         Log.d(TAG, " -> point_count: ${points.size}")
         Log.d(TAG, " -> points_gz size: ${compressedPoints.size} bytes")
 
@@ -84,6 +87,7 @@ object WearSyncManager {
                     putLong("start_time",         session.startTime.time)
                     putLong("end_time",           session.endTime?.time ?: 0L)
                     putFloat("total_distance",    session.totalDistance)
+                    putLong("active_duration_ms", activeDurationMs)
                     putInt("point_count",         points.size)
                     putByteArray("points_gz",     compressedPoints)
                     putLong("sync_timestamp",     System.currentTimeMillis())
