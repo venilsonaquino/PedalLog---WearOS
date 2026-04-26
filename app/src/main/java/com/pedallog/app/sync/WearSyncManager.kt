@@ -66,6 +66,15 @@ object WearSyncManager {
         }
 
         // ── 2. Montar PutDataMapRequest ───────────────────────────────────────
+        Log.d(TAG, "Montando DataMap para envio ao Mobile:")
+        Log.d(TAG, " -> sync_uuid: ${session.syncUuid}")
+        Log.d(TAG, " -> session_id: ${session.id}")
+        Log.d(TAG, " -> start_time: ${session.startTime}")
+        Log.d(TAG, " -> end_time: ${session.endTime}")
+        Log.d(TAG, " -> total_distance: ${session.totalDistance}km")
+        Log.d(TAG, " -> point_count: ${points.size}")
+        Log.d(TAG, " -> points_gz size: ${compressedPoints.size} bytes")
+
         val request = PutDataMapRequest
             .create("$DATA_PATH/${session.syncUuid}")
             .apply {

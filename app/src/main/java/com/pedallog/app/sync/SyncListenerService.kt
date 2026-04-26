@@ -50,9 +50,12 @@ class SyncListenerService : WearableListenerService() {
             Log.d(TAG, "Encontradas ${unsyncedSessions.size} sessões pendentes para sincronizar.")
 
             for (session in unsyncedSessions) {
+                Log.d(TAG, "Processando sessão ID=${session.id}, UUID=${session.syncUuid}")
                 // Recuperar pontos da sessão
                 val points = pedalDao.getPointsForSession(session.id)
                 
+                Log.d(TAG, "Sessão ${session.id}: ${points.size} pontos recuperados do banco.")
+
                 // Enviar via Data Layer (comprime + envia)
                 WearSyncManager.syncSession(applicationContext, session, points)
                 
@@ -60,7 +63,7 @@ class SyncListenerService : WearableListenerService() {
                 val updatedSession = session.copy(isSynced = true)
                 pedalDao.updateSession(updatedSession)
                 
-                Log.d(TAG, "Sessão ${session.id} sincronizada e marcada como isSynced = true.")
+                Log.d(TAG, "Sessão ${session.id} marcada como isSynced = true no banco local.")
             }
             
             Log.d(TAG, "Processo de sincronização finalizado com sucesso.")
