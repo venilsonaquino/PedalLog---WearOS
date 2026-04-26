@@ -24,32 +24,36 @@ class SyncListenerService : WearableListenerService() {
         Log.d(TAG, "Mensagem recebida: ${messageEvent.path}")
 
         if (messageEvent.path == "/request_sync") {
-            Log.d(TAG, "Pedido de sincronização recebido do mobile. Iniciando processo...")
+            Log.d(TAG, "Pedido de sincronização recebido do mobile. Iniciando processo (Sincronizando todas as sessões finalizadas)...")
             
             // Fornecer feedback visual/tátil de que o relógio recebeu o pedido
             vibrateFeedback()
 
             serviceScope.launch {
-                processSyncRequest()
+                processSyncRequest(forceAll = true)
             }
         }
     }
 
-    private suspend fun processSyncRequest() {
+    private suspend fun processSyncRequest(forceAll: Boolean = false) {
         try {
             val database = AppDatabase.getInstance(applicationContext)
             val pedalDao = database.pedalDao()
 
-            val unsyncedSessions = pedalDao.getUnsyncedSessions()
+            val sessionsToSync = if (forceAll) {
+                pedalDao.getAllCompletedSessions()
+            } else {
+                pedalDao.getUnsyncedSessions()
+            }
             
-            if (unsyncedSessions.isEmpty()) {
+            if (sessionsToSync.isEmpty()) {
                 Log.d(TAG, "Não há sessões pendentes de sincronização.")
                 return
             }
 
-            Log.d(TAG, "Encontradas ${unsyncedSessions.size} sessões pendentes para sincronizar.")
+            Log.d(TAG, "Encontradas ${sessionsToSync.size} sessões para sincronizar (forceAll=$forceAll).")
 
-            for (session in unsyncedSessions) {
+            for (session in sessionsToSync) {
                 Log.d(TAG, "Processando sessão ID=${session.id}, UUID=${session.syncUuid}")
                 // Recuperar pontos da sessão
                 val points = pedalDao.getPointsForSession(session.id)

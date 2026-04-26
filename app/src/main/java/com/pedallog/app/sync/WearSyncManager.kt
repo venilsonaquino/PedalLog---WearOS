@@ -86,6 +86,7 @@ object WearSyncManager {
                     putFloat("total_distance",    session.totalDistance)
                     putInt("point_count",         points.size)
                     putByteArray("points_gz",     compressedPoints)
+                    putLong("sync_timestamp",     System.currentTimeMillis())
                 }
             }
             .asPutDataRequest()
