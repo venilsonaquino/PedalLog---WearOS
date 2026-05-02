@@ -80,4 +80,10 @@ interface PedalDao {
      */
     @Query("DELETE FROM pedal_points WHERE sessionId = :sessionId")
     suspend fun clearPointsForSession(sessionId: Long)
+
+    /**
+     * Marca o último ponto gravado de uma sessão com segmentBreak = 1 (indicando pausa).
+     */
+    @Query("UPDATE pedal_points SET segmentBreak = 1 WHERE sessionId = :sessionId AND id = (SELECT id FROM pedal_points WHERE sessionId = :sessionId ORDER BY timestamp DESC LIMIT 1)")
+    suspend fun markLastPointAsBreak(sessionId: Long)
 }

@@ -7,12 +7,15 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+
 /**
  * Banco de dados Room do PedalLog.
  */
 @Database(
     entities = [PedalSession::class, PedalPoint::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -22,6 +25,12 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         private const val TAG = "PedalDebug"
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE pedal_points ADD COLUMN segmentBreak INTEGER NOT NULL DEFAULT 0")
+            }
+        }
 
         @Volatile
         private var INSTANCE: AppDatabase? = null
@@ -36,6 +45,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "pedal_database"
                 )
+                    .addMigrations(MIGRATION_4_5)
                     // .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }

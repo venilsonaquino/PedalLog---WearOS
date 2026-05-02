@@ -134,8 +134,8 @@ class TrackingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForegroundNotification()
         when (intent?.action) {
-            ACTION_START  -> handleStart()
-            ACTION_PAUSE  -> handlePause()
+            ACTION_START  -> handleStart(isAuto = false)
+            ACTION_PAUSE  -> handlePause(isManual = true)
             ACTION_FINISH -> handleFinish()
             null          -> handleSystemRestart()   // START_STICKY reiniciou o serviço
         }
@@ -155,12 +155,15 @@ class TrackingService : Service() {
         _activeTimeSeconds.value = 0L
     }
 
+    // ── Flag de Pausa Manual ──────────────────────────────────────────────────
+    private var isManuallyPaused = false
+
     // ── Máquina de Estados ────────────────────────────────────────────────────
 
     /**
      * ACTION_START — cria nova sessão ou retoma uma pausada.
      */
-    private fun handleStart() {
+    private fun handleStart(isAuto: Boolean = false) {
         serviceScope.launch {
             val active = withContext(Dispatchers.IO) { dao.getActiveSession() }
 
@@ -177,7 +180,6 @@ class TrackingService : Service() {
                 // ── Retoma sessão pausada ────────────────────────────────────
                 val resumed = active.copy(isPaused = false)
                 currentSession = resumed
-                totalDistanceMeters = FormatUtils.metersToKm(active.totalDistance) * 1000f // Reverte pra metros internamente
                 totalDistanceMeters = active.totalDistance * 1000f
                 _distanceTraveled.value = active.totalDistance.toDouble()
                 withContext(Dispatchers.IO) { dao.updateSession(resumed) }
@@ -191,6 +193,10 @@ class TrackingService : Service() {
             _hasActiveSession.value = true
             _isTracking.value = true
             
+            if (!isAuto) {
+                isManuallyPaused = false // Reseta a flag de pausa manual ao retomar na mão
+            }
+            
             // Inicia o GPS com intervalo rápido de 1s
             restartLocationUpdates(isPaused = false)
             startActiveTimer()
@@ -199,8 +205,13 @@ class TrackingService : Service() {
 
     /**
      * ACTION_PAUSE — pausa a sessão. O GPS continua em modo de economia para permitir Auto-Resume.
+     * @param isManual true se o usuário clicou no botão de pausa.
      */
-    private fun handlePause() {
+    private fun handlePause(isManual: Boolean = false) {
+        if (isManual) {
+            isManuallyPaused = true
+        }
+        
         // Em vez de parar totalmente, diminui a frequência para economia de bateria
         restartLocationUpdates(isPaused = true)
         
@@ -219,7 +230,8 @@ class TrackingService : Service() {
             currentSession = paused
             serviceScope.launch(Dispatchers.IO) {
                 dao.updateSession(paused)
-                Log.d("PedalDebug", "Sessão id=${paused.id} pausada. Dist=${paused.totalDistance} km")
+                dao.markLastPointAsBreak(paused.id)
+                Log.d("PedalDebug", "Sessão id=${paused.id} pausada (manual=$isManual). Dist=${paused.totalDistance} km")
             }
         }
     }
@@ -351,6 +363,9 @@ class TrackingService : Service() {
 
                 // ── Lógica de Auto-Resume (se pausado) ────────────────────────
                 if (_isPaused.value) {
+                    // Se o usuário pausou manualmente (ex: entrou no trem), bloqueia o Auto-Resume!
+                    if (isManuallyPaused) return
+                    
                     // Como o intervalo está em 5s, um único fix rápido > 1.0 m/s 
                     // já representa movimento sustentado.
                     if (rawSpeedMs > 1.0f) {
@@ -358,7 +373,7 @@ class TrackingService : Service() {
                         if (highSpeedSeconds >= 2) {
                             Log.d(TAG, "Auto-Resume engatado! (Velocidade: $rawSpeedMs m/s)")
                             triggerResumeVibration()
-                            handleStart()
+                            handleStart(isAuto = true)
                         }
                     } else {
                         highSpeedSeconds = 0
@@ -374,7 +389,7 @@ class TrackingService : Service() {
                     if (lowSpeedSeconds >= 5) {
                         Log.d(TAG, "Auto-Pause engatado! (Abaixo de 0.5 m/s por 5s)")
                         triggerPauseVibration()
-                        handlePause()
+                        handlePause(isManual = false)
                         return
                     }
                 } else {

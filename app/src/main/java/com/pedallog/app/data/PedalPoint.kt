@@ -40,5 +40,6 @@ data class PedalPoint(
     val longitude: Double,
     val speed: Double,                      // km/h
     val distance: Double,                   // km — distância acumulada na sessão
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val segmentBreak: Int = 0               // 1 significa que este é o último ponto antes de uma pausa
 )
