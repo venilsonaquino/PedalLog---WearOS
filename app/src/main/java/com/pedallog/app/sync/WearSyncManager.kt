@@ -7,6 +7,7 @@ import com.pedallog.app.data.PedalSession
 import com.pedallog.app.util.GzipCsvUtils
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
+import com.google.android.gms.wearable.Asset
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -78,18 +79,20 @@ object WearSyncManager {
         Log.d(TAG, " -> point_count: ${points.size}")
         Log.d(TAG, " -> points_gz size: ${compressedPoints.size} bytes")
 
+        val asset = Asset.createFromBytes(compressedPoints)
+
         val request = PutDataMapRequest
             .create("$DATA_PATH/${session.syncUuid}")
             .apply {
                 dataMap.run {
-                    putString("sync_uuid",       session.syncUuid)
+                    putString("sync_uuid",        session.syncUuid)
                     putLong("session_id",         session.id)
                     putLong("start_time",         session.startTime.time)
                     putLong("end_time",           session.endTime?.time ?: 0L)
                     putFloat("total_distance",    session.totalDistance)
                     putLong("active_duration_ms", activeDurationMs)
                     putInt("point_count",         points.size)
-                    putByteArray("points_gz",     compressedPoints)
+                    putAsset("points_asset",      asset)
                     putLong("sync_timestamp",     System.currentTimeMillis())
                 }
             }
