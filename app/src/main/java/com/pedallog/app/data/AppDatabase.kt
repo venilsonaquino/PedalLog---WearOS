@@ -28,7 +28,11 @@ abstract class AppDatabase : RoomDatabase() {
 
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE pedal_points ADD COLUMN segmentBreak INTEGER NOT NULL DEFAULT 0")
+                try {
+                    db.execSQL("ALTER TABLE pedal_points ADD COLUMN segmentBreak INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Coluna segmentBreak já existe", e)
+                }
             }
         }
 
