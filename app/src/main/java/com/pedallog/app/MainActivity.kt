@@ -264,82 +264,72 @@ fun PedalLogApp(isAmbient: Boolean, ambientUpdateTrigger: Int) {
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-
-                    // ── Elevação Real-Time ──
-                    if (hasSession) {
-                        Text(
-                            text = "▲ %.0fm".format(elevationGain),
-                            color = AmberAccent,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(2.dp))
-                    }
+                    // Spacer inicial para afastar do TimeText no topo do relógio
+                    Spacer(Modifier.height(12.dp))
 
                     // ── Distância (Métrica Principal) ──
                     Text(
                         text = "%.2f".format(distance),
                         color = mainMetricColor,
-                        fontSize = 46.sp,
+                        fontSize = 42.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
                     Text(
                         text = "km",
                         color = unitColor,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         textAlign = TextAlign.Center
                     )
 
                     Spacer(Modifier.height(8.dp))
 
-                    // ── Métricas Secundárias (Velocidade e Cronômetro) ──
+                    // ── Métricas Secundárias (Tempo e Subida) ──
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Velocidade Atual
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "%.1f".format(speed),
-                                color = secondaryMetricColor,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "km/h",
-                                color = unitColor,
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        // Divisor
-                        Text(text = "|", color = unitColor.copy(alpha = 0.5f), fontSize = 20.sp)
-
                         // Tempo Ativo
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = FormatUtils.formatActiveTime(activeTime, isAmbient),
                                 color = secondaryMetricColor,
-                                fontSize = 20.sp,
+                                fontSize = 18.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
                                 text = "tempo",
                                 color = unitColor,
-                                fontSize = 12.sp
+                                fontSize = 11.sp
+                            )
+                        }
+
+                        // Divisor
+                        Text(text = "|", color = unitColor.copy(alpha = 0.3f), fontSize = 18.sp)
+
+                        // Ganho de Elevação (Subida)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "%.0f".format(elevationGain),
+                                color = secondaryMetricColor,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "subida (m)",
+                                color = unitColor,
+                                fontSize = 11.sp
                             )
                         }
                     }
 
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(6.dp))
 
                     // ── Ocultar botões em modo Ambient ──
                     if (!isAmbient) {
                         if (!hasSession) {
                             GpsStatusIndicator(status = currentGpsSignal)
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(6.dp))
                         }
 
                         // ── Botão principal (máquina de estados) ──────────────────────
@@ -410,15 +400,17 @@ fun PedalLogApp(isAmbient: Boolean, ambientUpdateTrigger: Int) {
 
                         // Dica de long-press visível quando há sessão ativa
                         if (hasSession) {
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(3.dp))
                             Text(
                                 text = "Segurar = Finalizar",
                                 color = LabelGray.copy(alpha = 0.55f),
-                                fontSize = 10.sp,
+                                fontSize = 9.sp,
                                 textAlign = TextAlign.Center
                             )
                         }
                     }
+                    // Spacer final para garantir margem segura da borda inferior redonda
+                    Spacer(Modifier.height(10.dp))
                 }
 
                 // ── Warning dialog overlay ──
