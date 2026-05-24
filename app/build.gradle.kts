@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
 }
 
 android {
@@ -69,6 +70,7 @@ dependencies {
     // Wear Compose + Ambient Mode
     implementation(libs.wear.compose.material)
     implementation(libs.wear.compose.foundation)
+    implementation(libs.wear.compose.navigation)
     implementation(libs.androidx.wear)
 
     // Activity Compose
@@ -85,6 +87,10 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
+
+    // Dagger Hilt
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
