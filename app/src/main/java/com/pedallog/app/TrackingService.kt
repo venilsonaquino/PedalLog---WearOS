@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.location.Location
@@ -94,6 +95,12 @@ class TrackingService : Service() {
         /** true quando a sessão existe mas está temporariamente pausada. */
         private val _isPaused = MutableStateFlow(false)
         val isPaused: StateFlow<Boolean> = _isPaused
+
+        private val _gpsSignal = MutableStateFlow(com.pedallog.app.modules.tracking.domain.valueobjects.GpsSignal.ACQUIRING)
+        val gpsSignal: StateFlow<com.pedallog.app.modules.tracking.domain.valueobjects.GpsSignal> = _gpsSignal
+
+        private val _elevationGainMeters = MutableStateFlow(0.0)
+        val elevationGainMeters: StateFlow<Double> = _elevationGainMeters
     }
 
     // ── Instâncias ────────────────────────────────────────────────────────────
@@ -116,6 +123,9 @@ class TrackingService : Service() {
     /** Acumulador de distância em metros (convertido para km ao publicar no StateFlow). */
     private var totalDistanceMeters: Float = 0f
 
+    /** Última elevação registrada em metros para cálculo de ganho. */
+    private var lastElevationMeters: Double? = null
+
     // ── Contadores Auto-Pause / Auto-Resume ───────────────────────────────────
     private var lowSpeedSeconds = 0
     private var highSpeedSeconds = 0
@@ -129,6 +139,11 @@ class TrackingService : Service() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         dao = AppDatabase.getInstance(applicationContext).pedalDao()
         buildLocationCallback()
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+        val isGpsEnabled = locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)
+        if (!isGpsEnabled) {
+            _gpsSignal.value = com.pedallog.app.modules.tracking.domain.valueobjects.GpsSignal.DISABLED
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -153,6 +168,8 @@ class TrackingService : Service() {
         _isTracking.value = false
         _speedKmh.value = 0.0
         _activeTimeSeconds.value = 0L
+        _gpsSignal.value = com.pedallog.app.modules.tracking.domain.valueobjects.GpsSignal.ACQUIRING
+        _elevationGainMeters.value = 0.0
     }
 
     // ── Flag de Pausa Manual ──────────────────────────────────────────────────
@@ -175,13 +192,19 @@ class TrackingService : Service() {
                 totalDistanceMeters = 0f
                 _distanceTraveled.value = 0.0
                 _activeTimeSeconds.value = 0L
+                _elevationGainMeters.value = 0.0
+                lastElevationMeters = null
                 Log.d("PedalDebug", "Nova PedalSession criada: id=$insertedId")
-            } else {
+            }
+            
+            if (active != null) {
                 // ── Retoma sessão pausada ────────────────────────────────────
                 val resumed = active.copy(isPaused = false)
                 currentSession = resumed
                 totalDistanceMeters = active.totalDistance * 1000f
                 _distanceTraveled.value = active.totalDistance.toDouble()
+                _elevationGainMeters.value = active.totalElevationGain.toDouble()
+                lastElevationMeters = null
                 withContext(Dispatchers.IO) { dao.updateSession(resumed) }
                 Log.d("PedalDebug", "Sessão id=${active.id} retomada")
             }
@@ -225,7 +248,8 @@ class TrackingService : Service() {
             val paused = session.copy(
                 isPaused = true,
                 totalDistance = totalDistanceMeters / 1000f,
-                activeDurationMs = _activeTimeSeconds.value * 1000L
+                activeDurationMs = _activeTimeSeconds.value * 1000L,
+                totalElevationGain = _elevationGainMeters.value.toFloat()
             )
             currentSession = paused
             serviceScope.launch(Dispatchers.IO) {
@@ -238,16 +262,6 @@ class TrackingService : Service() {
 
     /**
      * ACTION_FINISH — finaliza a sessão com timestamp, sincroniza com o celular e para o serviço.
-     *
-     * Fluxo:
-     *  1. Para o GPS imediatamente.
-     *  2. Salva [endTime] e [totalDistance] no banco (Dispatchers.IO).
-     *  3. Carrega todos os pontos da sessão (Dispatchers.IO).
-     *  4. Publica os dados via Wearable Data Layer ([WearSyncManager]).
-     *  5. Reseta o estado e para o serviço.
-     *
-     * Erros na sincronização são capturados e logados, mas não impedem o
-     * término normal da sessão e o encerramento do serviço.
      */
     private fun handleFinish() {
         stopLocationUpdates()
@@ -261,7 +275,8 @@ class TrackingService : Service() {
                     endTime = Date(),
                     isPaused = false,
                     totalDistance = totalDistanceMeters / 1000f,
-                    activeDurationMs = _activeTimeSeconds.value * 1000L
+                    activeDurationMs = _activeTimeSeconds.value * 1000L,
+                    totalElevationGain = _elevationGainMeters.value.toFloat()
                 )
                 withContext(Dispatchers.IO) { dao.updateSession(finished) }
                 Log.d("PedalDebug", "Sessão id=${finished.id} finalizada. Dist=${finished.totalDistance} km")
@@ -293,9 +308,11 @@ class TrackingService : Service() {
             _hasActiveSession.value = false
             _distanceTraveled.value = 0.0
             _activeTimeSeconds.value = 0L
+            _elevationGainMeters.value = 0.0
             currentSession = null
             totalDistanceMeters = 0f
             lastLocation = null
+            lastElevationMeters = null
             stopSelf()
         }
     }
@@ -315,6 +332,8 @@ class TrackingService : Service() {
             currentSession = active
             totalDistanceMeters = active.totalDistance * 1000f
             _distanceTraveled.value = active.totalDistance.toDouble()
+            _elevationGainMeters.value = active.totalElevationGain.toDouble()
+            lastElevationMeters = null
             _hasActiveSession.value = true
 
             if (!active.isPaused) {
@@ -323,7 +342,9 @@ class TrackingService : Service() {
                 restartLocationUpdates(isPaused = false)
                 startActiveTimer()
                 Log.d("PedalDebug", "Sessão id=${active.id} restaurada e retomada automaticamente")
-            } else {
+            }
+            
+            if (active.isPaused) {
                 _isPaused.value = true
                 _isTracking.value = false
                 restartLocationUpdates(isPaused = true)
@@ -350,91 +371,138 @@ class TrackingService : Service() {
     private fun buildLocationCallback() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-
                 val location = result.lastLocation ?: return
-
-                // ── Filtro 1: Precisão ────────────────────────────────────────
-                if (!location.hasAccuracy() || location.accuracy > MIN_ACCURACY_METERS) {
-                    return
-                }
-
-                val rawSpeedMs = if (location.hasSpeed()) location.speed else 0f
-                val speedMs = if (rawSpeedMs >= MIN_SPEED_MS) rawSpeedMs else 0f
-
-                // ── Lógica de Auto-Resume (se pausado) ────────────────────────
-                if (_isPaused.value) {
-                    // Se o usuário pausou manualmente (ex: entrou no trem), bloqueia o Auto-Resume!
-                    if (isManuallyPaused) return
-                    
-                    // Como o intervalo está em 5s, um único fix rápido > 1.0 m/s 
-                    // já representa movimento sustentado.
-                    if (rawSpeedMs > 1.0f) {
-                        highSpeedSeconds += 5 // Soma 5s logo de cara
-                        if (highSpeedSeconds >= 2) {
-                            Log.d(TAG, "Auto-Resume engatado! (Velocidade: $rawSpeedMs m/s)")
-                            triggerResumeVibration()
-                            handleStart(isAuto = true)
-                        }
-                    } else {
-                        highSpeedSeconds = 0
-                    }
-                    return // Não acumula distância em modo pause
-                }
-
-                // ── Lógica de Auto-Pause (se ativo) ───────────────────────────
-                _speedKmh.value = FormatUtils.msToKmh(speedMs).toDouble()
-
-                if (rawSpeedMs < MIN_SPEED_MS) {
-                    lowSpeedSeconds++ // GPS em modo ativo atualiza a cada 1s
-                    if (lowSpeedSeconds >= 5) {
-                        Log.d(TAG, "Auto-Pause engatado! (Abaixo de 0.5 m/s por 5s)")
-                        triggerPauseVibration()
-                        handlePause(isManual = false)
-                        return
-                    }
-                } else {
-                    lowSpeedSeconds = 0
-                }
-
-                // ── Filtro 3: Acúmulo de distância + persistência ─────────────
-                if (speedMs > 0f) {
-                    lastLocation?.let { prev ->
-                        val segmentMeters = prev.distanceTo(location)
-                        // Rejeita segmentos implausíveis (>100 m/s ≈ 360 km/h)
-                        if (segmentMeters > 0f && segmentMeters < 100f) {
-                            totalDistanceMeters += segmentMeters
-                            _distanceTraveled.value = FormatUtils.metersToKm(totalDistanceMeters).toDouble()
-
-                            val sessionId = currentSession?.id ?: return@let
-                            val point = PedalPoint(
-                                sessionId = sessionId,
-                                latitude  = location.latitude,
-                                longitude = location.longitude,
-                                speed     = _speedKmh.value,
-                                distance  = _distanceTraveled.value,
-                                timestamp = location.time
-                            )
-                            
-                            // Se este for o primeiro ponto de uma nova sessão, 
-                            // atualizamos o startTime para o horário real do GPS
-                            if (totalDistanceMeters <= segmentMeters) {
-                                val updatedSession = currentSession?.copy(startTime = Date(location.time))
-                                if (updatedSession != null) {
-                                    currentSession = updatedSession
-                                    serviceScope.launch(Dispatchers.IO) {
-                                        dao.updateSession(updatedSession)
-                                    }
-                                }
-                            }
-
-                            serviceScope.launch(Dispatchers.IO) {
-                                dao.insertPoint(point)
-                            }
-                        }
-                    }
-                }
-                lastLocation = location
+                processLocationResult(location)
             }
+        }
+    }
+
+    private fun processLocationResult(location: Location) {
+        val isAccuracyInvalid = !location.hasAccuracy() || location.accuracy > MIN_ACCURACY_METERS
+        if (isAccuracyInvalid) {
+            return
+        }
+
+        updateGpsSignalState(location)
+
+        val rawSpeedMs = if (location.hasSpeed()) location.speed else 0f
+        val speedMs = if (rawSpeedMs >= MIN_SPEED_MS) rawSpeedMs else 0f
+
+        if (_isPaused.value) {
+            processPausedLocation(location, rawSpeedMs)
+            return
+        }
+
+        processActiveLocation(location, speedMs, rawSpeedMs)
+    }
+
+    private fun updateGpsSignalState(location: Location) {
+        val accuracyMeters = if (location.hasAccuracy()) location.accuracy else 999f
+        val accuracy = com.pedallog.app.modules.tracking.domain.valueobjects.GpsAccuracy(accuracyMeters)
+        if (accuracy.isStrong()) {
+            _gpsSignal.value = com.pedallog.app.modules.tracking.domain.valueobjects.GpsSignal.STRONG
+            return
+        }
+        _gpsSignal.value = com.pedallog.app.modules.tracking.domain.valueobjects.GpsSignal.WEAK
+    }
+
+    private fun processPausedLocation(location: Location, rawSpeedMs: Float) {
+        if (isManuallyPaused) {
+            return
+        }
+
+        if (rawSpeedMs <= 1.0f) {
+            highSpeedSeconds = 0
+            return
+        }
+
+        highSpeedSeconds += 5
+        if (highSpeedSeconds >= 2) {
+            Log.d(TAG, "Auto-Resume engatado! (Velocidade: $rawSpeedMs m/s)")
+            triggerResumeVibration()
+            handleStart(isAuto = true)
+        }
+    }
+
+    private fun processActiveLocation(location: Location, speedMs: Float, rawSpeedMs: Float) {
+        _speedKmh.value = FormatUtils.msToKmh(speedMs).toDouble()
+
+        if (rawSpeedMs < MIN_SPEED_MS) {
+            lowSpeedSeconds++
+            checkAutoPause()
+            return
+        }
+
+        lowSpeedSeconds = 0
+        recordLocationPoint(location, speedMs)
+    }
+
+    private fun checkAutoPause() {
+        if (lowSpeedSeconds >= 5) {
+            Log.d(TAG, "Auto-Pause engatado! (Abaixo de 0.5 m/s por 5s)")
+            triggerPauseVibration()
+            handlePause(isManual = false)
+        }
+    }
+
+    private fun recordLocationPoint(location: Location, speedMs: Float) {
+        val previous = lastLocation ?: run {
+            lastLocation = location
+            lastElevationMeters = if (location.hasAltitude()) location.altitude else null
+            return
+        }
+
+        val segmentMeters = previous.distanceTo(location)
+        if (segmentMeters <= 0f || segmentMeters >= 100f) {
+            lastLocation = location
+            return
+        }
+
+        totalDistanceMeters += segmentMeters
+        _distanceTraveled.value = FormatUtils.metersToKm(totalDistanceMeters).toDouble()
+
+        val currentElevation = if (location.hasAltitude()) location.altitude else 0.0
+        val previousElevationVal = lastElevationMeters?.let { com.pedallog.app.modules.tracking.domain.valueobjects.Elevation(it) }
+        val currentElevationVal = com.pedallog.app.modules.tracking.domain.valueobjects.Elevation(currentElevation)
+        val elevationGain = com.pedallog.app.modules.tracking.application.usecases.CalculateElevation.calculateGain(
+            previous = previousElevationVal,
+            current = currentElevationVal
+        )
+        if (elevationGain > 0.0) {
+            _elevationGainMeters.value += elevationGain
+        }
+        lastElevationMeters = currentElevation
+
+        val sessionId = currentSession?.id ?: return
+        val point = PedalPoint(
+            sessionId = sessionId,
+            latitude  = location.latitude,
+            longitude = location.longitude,
+            speed     = _speedKmh.value,
+            distance  = _distanceTraveled.value,
+            timestamp = location.time,
+            elevation = currentElevation
+        )
+
+        updateSessionMetrics(location, segmentMeters)
+
+        serviceScope.launch(Dispatchers.IO) {
+            dao.insertPoint(point)
+        }
+        lastLocation = location
+    }
+
+    private fun updateSessionMetrics(location: Location, segmentMeters: Float) {
+        val session = currentSession ?: return
+        val isFirstPoint = totalDistanceMeters <= segmentMeters
+        val newStartTime = if (isFirstPoint) Date(location.time) else session.startTime
+        val updatedSession = session.copy(
+            startTime = newStartTime,
+            totalElevationGain = _elevationGainMeters.value.toFloat()
+        )
+        currentSession = updatedSession
+        serviceScope.launch(Dispatchers.IO) {
+            dao.updateSession(updatedSession)
         }
     }
 

@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [PedalSession::class, PedalPoint::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -50,7 +50,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "pedal_database"
                 )
                     // .addMigrations(MIGRATION_4_5)
-                    // .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }
             }

@@ -85,15 +85,16 @@ object WearSyncManager {
             .create("$DATA_PATH/${session.syncUuid}")
             .apply {
                 dataMap.run {
-                    putString("sync_uuid",        session.syncUuid)
-                    putLong("session_id",         session.id)
-                    putLong("start_time",         session.startTime.time)
-                    putLong("end_time",           session.endTime?.time ?: 0L)
-                    putFloat("total_distance",    session.totalDistance)
-                    putLong("active_duration_ms", activeDurationMs)
-                    putInt("point_count",         points.size)
-                    putAsset("points_asset",      asset)
-                    putLong("sync_timestamp",     System.currentTimeMillis())
+                    putString("sync_uuid",            session.syncUuid)
+                    putLong("session_id",             session.id)
+                    putLong("start_time",             session.startTime.time)
+                    putLong("end_time",               session.endTime?.time ?: 0L)
+                    putFloat("total_distance",        session.totalDistance)
+                    putFloat("total_elevation_gain",   session.totalElevationGain)
+                    putLong("active_duration_ms",     activeDurationMs)
+                    putInt("point_count",             points.size)
+                    putAsset("points_asset",          asset)
+                    putLong("sync_timestamp",         System.currentTimeMillis())
                 }
             }
             .asPutDataRequest()

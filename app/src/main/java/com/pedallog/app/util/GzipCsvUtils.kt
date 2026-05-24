@@ -22,7 +22,7 @@ object GzipCsvUtils {
      * Converte a lista de pontos GPS em um CSV compacto.
      */
     private fun buildPointsCsv(points: List<PedalPoint>): String = buildString(
-        capacity = points.size * 48
+        capacity = points.size * 56
     ) {
         points.forEach { p ->
             append("%.6f".format(p.latitude)).append(',')
@@ -30,7 +30,8 @@ object GzipCsvUtils {
             append("%.2f".format(p.speed)).append(',')
             append("%.4f".format(p.distance)).append(',')
             append(p.timestamp).append(',')
-            appendLine(p.segmentBreak)
+            append(p.segmentBreak).append(',')
+            append("%.2f".format(p.elevation)).appendLine()
         }
     }
 
