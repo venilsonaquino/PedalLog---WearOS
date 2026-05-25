@@ -23,6 +23,10 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import javax.inject.Inject
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 
 /**
  * Provedor de geolocalização por GPS usando o FusedLocationProviderClient.
@@ -38,12 +42,37 @@ class FusedGpsProvider @Inject constructor(
 
     @SuppressLint("MissingPermission")
     override fun observeGpsSignal(): Flow<GpsSignal> = callbackFlow {
-        if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            trySend(GpsSignal.DISABLED)
+        val checkSignal = {
+            if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                trySend(GpsSignal.DISABLED)
+            } else {
+                trySend(GpsSignal.ACQUIRING)
+            }
         }
+
+        checkSignal()
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == LocationManager.PROVIDERS_CHANGED_ACTION) {
+                    checkSignal()
+                }
+            }
+        }
+
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
+                if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    trySend(GpsSignal.DISABLED)
+                    return
+                }
                 val location = result.lastLocation ?: return
                 val accuracy = GpsAccuracy(location.accuracy)
                 val signal = if (accuracy.isStrong()) GpsSignal.STRONG else GpsSignal.WEAK
@@ -58,6 +87,7 @@ class FusedGpsProvider @Inject constructor(
         locationClient.requestLocationUpdates(request, callback, Looper.getMainLooper())
 
         awaitClose {
+            context.unregisterReceiver(receiver)
             locationClient.removeLocationUpdates(callback)
         }
     }

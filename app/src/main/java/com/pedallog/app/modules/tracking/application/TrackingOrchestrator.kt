@@ -3,7 +3,7 @@ package com.pedallog.app.modules.tracking.application
 import com.pedallog.app.modules.tracking.application.usecases.AutoPauseDetectorUseCase
 import com.pedallog.app.modules.tracking.application.usecases.FinishRideUseCase
 import com.pedallog.app.modules.tracking.application.usecases.ProcessLocationUseCase
-import com.pedallog.app.modules.tracking.domain.entities.RideSession
+import com.pedallog.app.modules.tracking.domain.entities.RideSessionEntity
 import com.pedallog.app.modules.tracking.domain.repositories.IGpsProvider
 import com.pedallog.app.modules.tracking.domain.repositories.ISessionRepository
 import kotlinx.coroutines.*

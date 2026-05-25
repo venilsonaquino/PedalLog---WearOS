@@ -10,7 +10,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.pedallog.app.modules.tracking.application.TrackingOrchestrator
 import com.pedallog.app.modules.tracking.application.usecases.FinishRideUseCase
-import com.pedallog.app.modules.tracking.domain.entities.RideSession
+import com.pedallog.app.modules.tracking.domain.entities.RideSessionEntity
 import com.pedallog.app.modules.tracking.domain.repositories.IGpsProvider
 import com.pedallog.app.modules.tracking.domain.repositories.ISessionRepository
 import com.pedallog.app.modules.tracking.domain.valueobjects.GpsSignal
@@ -89,8 +89,10 @@ class TrackingService : Service() {
                 }
             }
             launch {
-                gpsProvider.observeLocationUpdates(isPaused.value).collectLatest { update ->
-                    _speedKmh.value = update.speed.toKilometersPerHour()
+                isPaused.collectLatest { paused ->
+                    gpsProvider.observeLocationUpdates(paused).collectLatest { update ->
+                        _speedKmh.value = update.speed.toKilometersPerHour()
+                    }
                 }
             }
             launch {
@@ -118,7 +120,7 @@ class TrackingService : Service() {
         serviceScope.launch {
             val active = sessionRepository.getActiveSession()
             if (active == null) {
-                val newSession = RideSession.createNew()
+                val newSession = RideSessionEntity.createNew()
                 sessionRepository.save(newSession)
             } else {
                 val resumed = active.resume()

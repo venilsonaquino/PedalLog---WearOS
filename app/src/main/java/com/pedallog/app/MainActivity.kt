@@ -62,13 +62,19 @@ class MainActivity : ComponentActivity() {
             val navController = rememberSwipeDismissableNavController()
             
             var gpsWarningType by remember { mutableStateOf<GpsWarningType?>(null) }
-            val hasPermission = ContextCompat.checkSelfPermission(
-                context, Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+            var hasPermission by remember {
+                mutableStateOf(
+                    ContextCompat.checkSelfPermission(
+                        context, Manifest.permission.ACCESS_FINE_LOCATION
+                    ) == PackageManager.PERMISSION_GRANTED
+                )
+            }
 
             val permissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestMultiplePermissions()
-            ) {}
+            ) { permissions ->
+                hasPermission = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+            }
 
             val burnInOffset = remember(isAmbient, ambientUpdateTrigger) {
                 if (isAmbient) {
@@ -99,7 +105,10 @@ class MainActivity : ComponentActivity() {
                             context.startActivity(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
                         },
                         onStartClick = {
-                            if (!hasPermission) {
+                            val currentPermission = ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.ACCESS_FINE_LOCATION
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (!currentPermission) {
                                 permissionLauncher.launch(
                                     arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
                                 )
